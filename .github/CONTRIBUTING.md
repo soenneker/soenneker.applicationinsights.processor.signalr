@@ -1,4 +1,4 @@
-# Contributing to Soenneker.ApplicationInsights.Processor.SignalR
+﻿# Contributing to Soenneker.ApplicationInsights.Processor.SignalR
 
 We're excited that you're interested in contributing!
 
