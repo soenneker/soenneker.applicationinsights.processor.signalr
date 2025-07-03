@@ -7,7 +7,7 @@ namespace Soenneker.ApplicationInsights.Processor.SignalR;
 /// <summary>
 /// A telemetry processor connecting SignalR hub traffic and Application Insights
 /// </summary>
-public class SignalRTelemetryProcessor : ITelemetryProcessor
+public sealed class SignalRTelemetryProcessor : ITelemetryProcessor
 {
     private ITelemetryProcessor Next { get; }
 
