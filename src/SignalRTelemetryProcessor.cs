@@ -1,37 +1,24 @@
-using Microsoft.ApplicationInsights.Channel;
-using Microsoft.ApplicationInsights.DataContracts;
-using Microsoft.ApplicationInsights.Extensibility;
+using System;
+using Microsoft.AspNetCore.Http;
+using Microsoft.Extensions.Options;
+using OpenTelemetry.Instrumentation.AspNetCore;
 
 namespace Soenneker.ApplicationInsights.Processor.SignalR;
 
 /// <summary>
 /// A telemetry processor connecting SignalR hub traffic and Application Insights
 /// </summary>
-public sealed class SignalRTelemetryProcessor : ITelemetryProcessor
+public sealed class SignalRTelemetryProcessor : IConfigureOptions<AspNetCoreTraceInstrumentationOptions>
 {
-    private ITelemetryProcessor Next { get; }
-
-    public SignalRTelemetryProcessor(ITelemetryProcessor next)
+    public void Configure(AspNetCoreTraceInstrumentationOptions options)
     {
-        Next = next;
-    }
+        // Filter receives HttpContext; returning false prevents collection. :contentReference[oaicite:1]{index=1}
+        options.Filter = static (HttpContext ctx) =>
+        {
+            PathString path = ctx.Request.Path;
 
-    public void Process(ITelemetry item)
-    {
-        if (!ShouldSend(item))
-            return;
-
-        Next.Process(item);
-    }
-
-    private static bool ShouldSend(ITelemetry item)
-    {
-        if (item is not RequestTelemetry telemetry)
-            return true;
-
-        if (telemetry.Url == null)
-            return false;
-
-        return !telemetry.Url.AbsolutePath.Contains("/hubs");
+            // Covers /hubs, /hubs/anything, and typical negotiate endpoints (/hubs/foo/negotiate)
+            return !path.StartsWithSegments("/hubs", StringComparison.OrdinalIgnoreCase);
+        };
     }
 }
