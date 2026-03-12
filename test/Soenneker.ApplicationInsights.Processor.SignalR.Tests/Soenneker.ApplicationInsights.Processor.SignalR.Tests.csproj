@@ -27,7 +27,7 @@
     </ItemGroup>
 
     <ItemGroup>
-        <ProjectReference Include="..\..\src\Soenneker.ApplicationInsights.Processor.SignalR.csproj" />
+        <ProjectReference Include="..\..\src\Soenneker.ApplicationInsights.Processor.SignalR\Soenneker.ApplicationInsights.Processor.SignalR.csproj" />
     </ItemGroup>
 
     <ItemGroup>
