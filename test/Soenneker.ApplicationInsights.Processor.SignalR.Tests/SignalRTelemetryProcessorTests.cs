@@ -1,16 +1,15 @@
-using Soenneker.Tests.FixturedUnit;
-using Xunit;
+using Soenneker.Tests.HostedUnit;
 
 namespace Soenneker.ApplicationInsights.Processor.SignalR.Tests;
 
-[Collection("Collection")]
-public class SignalRTelemetryProcessorTests : FixturedUnitTest
+[ClassDataSource<Host>(Shared = SharedType.PerTestSession)]
+public class SignalRTelemetryProcessorTests : HostedUnitTest
 {
-    public SignalRTelemetryProcessorTests(Fixture fixture, ITestOutputHelper output) : base(fixture, output)
+    public SignalRTelemetryProcessorTests(Host host) : base(host)
     {
     }
 
-    [Fact]
+    [Test]
     public void Default()
     {
 
