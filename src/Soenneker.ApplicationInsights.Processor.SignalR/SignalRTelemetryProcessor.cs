@@ -10,6 +10,10 @@ namespace Soenneker.ApplicationInsights.Processor.SignalR;
 /// </summary>
 public sealed class SignalRTelemetryProcessor : IConfigureOptions<AspNetCoreTraceInstrumentationOptions>
 {
+    /// <summary>
+    /// Configures the specified options.
+    /// </summary>
+    /// <param name="options">The options.</param>
     public void Configure(AspNetCoreTraceInstrumentationOptions options)
     {
         // Filter receives HttpContext; returning false prevents collection. :contentReference[oaicite:1]{index=1}
