@@ -15,8 +15,8 @@ namespace Soenneker.ApplicationInsights.Processor.SignalR.Registrars
         /// <summary>
         /// Adds signal r hub telemetry processor.
         /// </summary>
-        /// <param name="services">The service collection.</param>
-        /// <returns>The result of the operation.</returns>
+        /// <param name="services">Service collection that receives the registration.</param>
+        /// <returns>The same service collection, so additional registrations can be chained.</returns>
         public static IServiceCollection AddSignalRHubTelemetryProcessor(this IServiceCollection services)
         {
             services.AddSingleton<IConfigureOptions<AspNetCoreTraceInstrumentationOptions>, SignalRTelemetryProcessor>();

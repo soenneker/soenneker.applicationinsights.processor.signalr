@@ -11,9 +11,9 @@ namespace Soenneker.ApplicationInsights.Processor.SignalR;
 public sealed class SignalRTelemetryProcessor : IConfigureOptions<AspNetCoreTraceInstrumentationOptions>
 {
     /// <summary>
-    /// Configures the specified options.
+    /// Applies signal r telemetry processor-specific settings to the supplied options.
     /// </summary>
-    /// <param name="options">The options.</param>
+    /// <param name="options">Options to configure for the signal r telemetry processor.</param>
     public void Configure(AspNetCoreTraceInstrumentationOptions options)
     {
         // Filter receives HttpContext; returning false prevents collection. :contentReference[oaicite:1]{index=1}
