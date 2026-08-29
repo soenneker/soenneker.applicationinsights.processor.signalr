@@ -5,34 +5,82 @@
 
 # Soenneker.ApplicationInsights.Processor.SignalR
 
-Represents the signal r telemetry processor registrar.
+An OpenTelemetry ASP.NET Core instrumentation filter that excludes requests under `/hubs` from exported request traces.
 
-## Install
+Use it when SignalR connection, transport, and negotiate requests create unwanted Application Insights volume and every application hub is mapped beneath `/hubs`.
+
+## Installation
 
 ```bash
 dotnet add package Soenneker.ApplicationInsights.Processor.SignalR
 ```
 
-## Quick start
+## Registration
 
 ```csharp
+using Azure.Monitor.OpenTelemetry.AspNetCore;
 using Soenneker.ApplicationInsights.Processor.SignalR.Registrars;
-using Microsoft.Extensions.DependencyInjection;
 
-var services = new ServiceCollection();
-var result = services.AddSignalRHubTelemetryProcessor();
+builder.Services
+       .AddOpenTelemetry()
+       .UseAzureMonitor();
+
+builder.Services.AddSignalRHubTelemetryProcessor();
 ```
 
-Adds signal r hub telemetry processor.
+The registrar adds `SignalRTelemetryProcessor` as an `IConfigureOptions<AspNetCoreTraceInstrumentationOptions>` implementation. It does not register a separately resolved processor service.
 
-## What you get
+## What is filtered
 
-- `SignalRTelemetryProcessorRegistrar` — Represents the signal r telemetry processor registrar.
-- `SignalRTelemetryProcessor` — A telemetry processor connecting SignalR hub traffic and Application Insights.
+The filter performs a case-insensitive `PathString.StartsWithSegments("/hubs")` check.
 
-## API at a glance
+Filtered examples:
 
-| API | What it does | Result / important behavior |
-| --- | --- | --- |
-| `SignalRTelemetryProcessorRegistrar.AddSignalRHubTelemetryProcessor(services)` | Adds signal r hub telemetry processor. | The same service collection, so additional registrations can be chained. |
-| `SignalRTelemetryProcessor.Configure(options)` | Applies signal r telemetry processor-specific settings to the supplied options. | Returns no value; the requested change is complete when the method returns. |
+```text
+/hubs
+/hubs/chat
+/hubs/chat/negotiate
+/HUBS/notifications
+```
+
+Requests outside that path segment continue through ASP.NET Core instrumentation:
+
+```text
+/api/hubs
+/hub
+/health
+```
+
+The filter prevents collection of the matching ASP.NET Core server activities. It does not merely hide them in the Azure portal, and it does not filter application logs or custom telemetry emitted separately.
+
+## Map hubs consistently
+
+The package assumes hubs are rooted at `/hubs`:
+
+```csharp
+app.MapHub<ChatHub>("/hubs/chat");
+app.MapHub<NotificationsHub>("/hubs/notifications");
+```
+
+A hub mapped elsewhere is not filtered. Conversely, every non-SignalR endpoint under `/hubs` is also filtered.
+
+## Composition caveat
+
+`SignalRTelemetryProcessor` assigns `AspNetCoreTraceInstrumentationOptions.Filter`. It does not combine its predicate with a filter already configured by the application or another package. Whichever options configurator assigns the property last determines the effective filter.
+
+When the application needs several conditions, prefer one application-owned predicate that composes them explicitly:
+
+```csharp
+builder.Services.Configure<AspNetCoreTraceInstrumentationOptions>(options =>
+{
+    options.Filter = context =>
+        !context.Request.Path.StartsWithSegments("/hubs") &&
+        !context.Request.Path.StartsWithSegments("/health");
+});
+```
+
+Do not register the package's configurator in addition to a composed application filter unless the resulting options order is intentional.
+
+## API
+
+`AddSignalRHubTelemetryProcessor(IServiceCollection)` registers the ASP.NET Core trace-options configurator and returns the same service collection for chaining.
