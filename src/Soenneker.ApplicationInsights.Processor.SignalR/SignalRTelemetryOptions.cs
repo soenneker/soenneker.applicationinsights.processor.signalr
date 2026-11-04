@@ -9,6 +9,8 @@ public sealed class SignalRTelemetryOptions
     public bool SuppressHubRequests { get; set; }
     /// <summary>Keep negotiation traces when transport suppression is enabled. Default true.</summary>
     public bool PreserveNegotiation { get; set; } = true;
+    /// <summary>Keep authentication refresh traces when transport suppression is enabled. Default true.</summary>
+    public bool PreserveAuthenticationRefresh { get; set; } = true;
     /// <summary>Hub route prefixes to match by complete path segment. Default is /hubs.</summary>
     public PathString[] HubPathPrefixes { get; set; } = [new("/hubs")];
 }

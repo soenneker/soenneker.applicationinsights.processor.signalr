@@ -33,6 +33,23 @@ public sealed class SignalRTelemetryProcessorTests
         await Assert.That(options.Filter(Context("/hubs/orders"))).IsTrue();
     }
 
+    [Test]
+    public async ValueTask Refresh_traces_are_preserved_unless_disabled_and_respect_existing_filter()
+    {
+        var settings = new SignalRTelemetryOptions { SuppressHubRequests = true, PreserveNegotiation = false };
+        var options = new AspNetCoreTraceInstrumentationOptions { Filter = ctx => ctx.Request.Path != "/hubs/secret/refresh" };
+        new SignalRTelemetryProcessor(Options.Create(settings)).Configure(options);
+        await Assert.That(options.Filter!(Context("/hubs/orders/refresh"))).IsTrue();
+        await Assert.That(options.Filter(Context("/hubs/orders/REFRESH/"))).IsTrue();
+        await Assert.That(options.Filter(Context("/hubs/secret/refresh"))).IsFalse();
+        await Assert.That(options.Filter(Context("/hubs/orders/negotiate"))).IsFalse();
+        await Assert.That(options.Filter(Context("/hubs/orders/refreshing"))).IsFalse();
+        settings.PreserveAuthenticationRefresh = false;
+        var suppressed = new AspNetCoreTraceInstrumentationOptions();
+        new SignalRTelemetryProcessor(Options.Create(settings)).Configure(suppressed);
+        await Assert.That(suppressed.Filter!(Context("/hubs/orders/refresh"))).IsFalse();
+    }
+
     private static HttpContext Context(string path)
     {
         var context = new DefaultHttpContext(); context.Request.Path = path; return context;
