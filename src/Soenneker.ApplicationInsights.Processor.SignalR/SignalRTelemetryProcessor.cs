@@ -2,12 +2,14 @@ using System;
 using System.Linq;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Options;
-using OpenTelemetry.Instrumentation.AspNetCore;
+using Microsoft.AspNetCore.Builder;
+using Microsoft.AspNetCore.Hosting;
+using Microsoft.AspNetCore.Http.Features;
+using System.Diagnostics;
 
 namespace Soenneker.ApplicationInsights.Processor.SignalR;
 
-/// <summary>Composes optional hub request filtering with the existing ASP.NET Core trace filter.</summary>
-public sealed class SignalRTelemetryProcessor : IConfigureOptions<AspNetCoreTraceInstrumentationOptions>
+public sealed class SignalRTelemetryProcessor : IStartupFilter
 {
     private readonly bool _suppress;
     private readonly bool _preserveNegotiation;
@@ -28,19 +30,31 @@ public sealed class SignalRTelemetryProcessor : IConfigureOptions<AspNetCoreTrac
             throw new ArgumentException("Hub prefixes must be non-root paths.");
     }
 
-    public void Configure(AspNetCoreTraceInstrumentationOptions options)
+    public Action<IApplicationBuilder> Configure(Action<IApplicationBuilder> next)
     {
-        ArgumentNullException.ThrowIfNull(options);
-        if (!_suppress) return;
-        Func<HttpContext, bool>? previous = options.Filter;
-        options.Filter = context =>
+        ArgumentNullException.ThrowIfNull(next);
+        return app =>
         {
-            if (previous != null && !previous(context)) return false;
-            PathString path = context.Request.Path;
-            if (!_prefixes.Any(prefix => path.StartsWithSegments(prefix, StringComparison.OrdinalIgnoreCase))) return true;
-            string? endpoint = path.Value?.TrimEnd('/');
-            return (_preserveNegotiation && endpoint?.EndsWith("/negotiate", StringComparison.OrdinalIgnoreCase) == true) ||
-                (_preserveAuthenticationRefresh && endpoint?.EndsWith("/refresh", StringComparison.OrdinalIgnoreCase) == true);
+            app.Use(async (context, continuation) =>
+            {
+                if (ShouldSuppress(context) && context.Features.Get<IHttpActivityFeature>()?.Activity is { } activity)
+                {
+                    activity.IsAllDataRequested = false;
+                    activity.ActivityTraceFlags &= ~ActivityTraceFlags.Recorded;
+                }
+                await continuation(context);
+            });
+            next(app);
         };
+    }
+
+    private bool ShouldSuppress(HttpContext context)
+    {
+        if (!_suppress) return false;
+        PathString path = context.Request.Path;
+        if (!_prefixes.Any(prefix => path.StartsWithSegments(prefix, StringComparison.OrdinalIgnoreCase))) return false;
+        string? endpoint = path.Value?.TrimEnd('/');
+        return !((_preserveNegotiation && endpoint?.EndsWith("/negotiate", StringComparison.OrdinalIgnoreCase) == true) ||
+            (_preserveAuthenticationRefresh && endpoint?.EndsWith("/refresh", StringComparison.OrdinalIgnoreCase) == true));
     }
 }

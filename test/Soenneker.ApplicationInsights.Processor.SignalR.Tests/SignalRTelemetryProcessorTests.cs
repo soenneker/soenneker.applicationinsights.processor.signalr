@@ -1,57 +1,53 @@
+using System.Diagnostics;
 using System.Threading.Tasks;
+using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Http.Features;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
-using OpenTelemetry.Instrumentation.AspNetCore;
 
 namespace Soenneker.ApplicationInsights.Processor.SignalR.Tests;
 
 public sealed class SignalRTelemetryProcessorTests
 {
     [Test]
-    public async ValueTask Default_preserves_existing_filter_and_negotiation()
-    {
-        var options = new AspNetCoreTraceInstrumentationOptions { Filter = ctx => ctx.Request.Path != "/excluded" };
-        var previous = options.Filter;
-        new SignalRTelemetryProcessor().Configure(options);
-        await Assert.That(ReferenceEquals(previous, options.Filter)).IsTrue();
-        await Assert.That(options.Filter!(Context("/hubs/orders/negotiate"))).IsTrue();
-        await Assert.That(options.Filter(Context("/excluded"))).IsFalse();
-    }
-
-    [Test]
-    public async ValueTask Suppression_composes_filter_preserves_negotiation_and_matches_segments()
+    [Arguments("/realtime/orders", false)]
+    [Arguments("/realtime/orders/negotiate", true)]
+    [Arguments("/realtime/orders/REFRESH/", true)]
+    [Arguments("/realtime-other/orders", true)]
+    public async ValueTask Native_activity_filter_matches_segments_and_preserves_control_requests(string path, bool recorded)
     {
         var settings = new SignalRTelemetryOptions { SuppressHubRequests = true, HubPathPrefixes = [new("/realtime")] };
         var processor = new SignalRTelemetryProcessor(Options.Create(settings));
         settings.HubPathPrefixes[0] = new("/changed");
-        var options = new AspNetCoreTraceInstrumentationOptions { Filter = ctx => ctx.Request.Path != "/realtime/secret/negotiate" };
-        processor.Configure(options);
-        await Assert.That(options.Filter!(Context("/realtime/orders"))).IsFalse();
-        await Assert.That(options.Filter(Context("/realtime/orders/negotiate"))).IsTrue();
-        await Assert.That(options.Filter(Context("/realtime/secret/negotiate"))).IsFalse();
-        await Assert.That(options.Filter(Context("/realtime-other/orders"))).IsTrue();
-        await Assert.That(options.Filter(Context("/hubs/orders"))).IsTrue();
+        using var services = new ServiceCollection().BuildServiceProvider();
+        var app = new ApplicationBuilder(services);
+        var called = false;
+        processor.Configure(builder => builder.Run(_ => { called = true; return Task.CompletedTask; }))(app);
+        using var activity = new Activity("request");
+        activity.ActivityTraceFlags = ActivityTraceFlags.Recorded;
+        activity.IsAllDataRequested = true;
+        var context = new DefaultHttpContext();
+        context.Request.Path = path;
+        context.Features.Set<IHttpActivityFeature>(new TestActivityFeature(activity));
+        await app.Build()(context);
+        await Assert.That(activity.Recorded).IsEqualTo(recorded);
+        await Assert.That(activity.IsAllDataRequested).IsEqualTo(recorded);
+        await Assert.That(called).IsTrue();
     }
 
     [Test]
-    public async ValueTask Refresh_traces_are_preserved_unless_disabled_and_respect_existing_filter()
+    public async ValueTask Default_does_not_resample_an_unrecorded_activity()
     {
-        var settings = new SignalRTelemetryOptions { SuppressHubRequests = true, PreserveNegotiation = false };
-        var options = new AspNetCoreTraceInstrumentationOptions { Filter = ctx => ctx.Request.Path != "/hubs/secret/refresh" };
-        new SignalRTelemetryProcessor(Options.Create(settings)).Configure(options);
-        await Assert.That(options.Filter!(Context("/hubs/orders/refresh"))).IsTrue();
-        await Assert.That(options.Filter(Context("/hubs/orders/REFRESH/"))).IsTrue();
-        await Assert.That(options.Filter(Context("/hubs/secret/refresh"))).IsFalse();
-        await Assert.That(options.Filter(Context("/hubs/orders/negotiate"))).IsFalse();
-        await Assert.That(options.Filter(Context("/hubs/orders/refreshing"))).IsFalse();
-        settings.PreserveAuthenticationRefresh = false;
-        var suppressed = new AspNetCoreTraceInstrumentationOptions();
-        new SignalRTelemetryProcessor(Options.Create(settings)).Configure(suppressed);
-        await Assert.That(suppressed.Filter!(Context("/hubs/orders/refresh"))).IsFalse();
-    }
-
-    private static HttpContext Context(string path)
-    {
-        var context = new DefaultHttpContext(); context.Request.Path = path; return context;
+        using var services = new ServiceCollection().BuildServiceProvider();
+        var app = new ApplicationBuilder(services);
+        new SignalRTelemetryProcessor().Configure(builder => builder.Run(_ => Task.CompletedTask))(app);
+        using var activity = new Activity("request") { IsAllDataRequested = false };
+        var context = new DefaultHttpContext();
+        context.Request.Path = "/hubs/orders";
+        context.Features.Set<IHttpActivityFeature>(new TestActivityFeature(activity));
+        await app.Build()(context);
+        await Assert.That(activity.Recorded).IsFalse();
+        await Assert.That(activity.IsAllDataRequested).IsFalse();
     }
 }

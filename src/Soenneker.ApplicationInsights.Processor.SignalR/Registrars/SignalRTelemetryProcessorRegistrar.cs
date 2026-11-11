@@ -1,7 +1,7 @@
 ﻿using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
 using Microsoft.Extensions.DependencyInjection.Extensions;
-using OpenTelemetry.Instrumentation.AspNetCore;
+using Microsoft.AspNetCore.Hosting;
 using System;
 
 namespace Soenneker.ApplicationInsights.Processor.SignalR.Registrars
@@ -18,12 +18,12 @@ namespace Soenneker.ApplicationInsights.Processor.SignalR.Registrars
         /// <returns>The same service collection, so additional registrations can be chained.</returns>
         public static IServiceCollection AddSignalRHubTelemetryProcessor(this IServiceCollection services) => AddSignalRHubTelemetryProcessor(services, null);
 
-        /// <summary>Registers optional hub transport suppression while retaining the previously configured request filter.</summary>
+        /// <summary>Registers optional hub transport suppression on the native ASP.NET Core request activity without changing sampling decisions for other requests.</summary>
         public static IServiceCollection AddSignalRHubTelemetryProcessor(this IServiceCollection services, Action<SignalRTelemetryOptions>? configure)
         {
             services.AddOptions<SignalRTelemetryOptions>();
             if (configure != null) services.Configure(configure);
-            services.TryAddEnumerable(ServiceDescriptor.Singleton<IConfigureOptions<AspNetCoreTraceInstrumentationOptions>, SignalRTelemetryProcessor>());
+            services.TryAddEnumerable(ServiceDescriptor.Singleton<IStartupFilter, SignalRTelemetryProcessor>());
             return services;
         }
     }
